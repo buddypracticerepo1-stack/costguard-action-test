@@ -34,6 +34,7 @@ jobs:
         with:
           plan-path: plan.json
           api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: 'https://4tm9xj5nv0.execute-api.us-east-1.amazonaws.com/rnd'
           skip-budget: 'true'
 
       - run: |
