@@ -1,0 +1,50 @@
+# CostGuard Action Integration Test
+#
+# Uses pre-generated plan.json (no real Terraform needed)
+
+name: CostGuard
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  terraform-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          echo "Simulating terraform plan..."
+          cp terraform/plan.json plan.json
+          echo "Plan generated successfully"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: plan.json
+
+  cost-review:
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          skip-budget: 'true'
+
+      - run: |
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          echo "Monthly cost: ${{ steps.costguard.outputs.monthly-cost }}"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: costguard-reports
+          path: |
+            costguard-result.json
+            costguard-report.html
+          retention-days: 30
