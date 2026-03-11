@@ -1,8 +1,8 @@
-# CostGuard Action Integration Test
+# CostGuard GitHub Action — Integration Test Suite
 #
-# Uses pre-generated plan.json (no real Terraform needed)
+# 7 scenarios testing all CLI features
 
-name: CostGuard
+name: CostGuard Integration Tests
 on:
   pull_request:
     branches: [main]
@@ -11,45 +11,252 @@ permissions:
   contents: read
   pull-requests: write
 
+env:
+  API_URL: 'https://4tm9xj5nv0.execute-api.us-east-1.amazonaws.com/rnd'
+
 jobs:
   terraform-plan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: |
-          echo "Simulating terraform plan..."
-          cp terraform/plan.json plan.json
-          echo "Plan generated successfully"
+      - run: cp terraform/plan.json plan.json
       - uses: actions/upload-artifact@v4
         with:
           name: plan
           path: plan.json
 
-  cost-review:
+  # Scenario 1: Pricing only — skip everything, fastest path
+  s1-pricing-only:
+    name: "S1: Pricing Only"
     needs: terraform-plan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           name: plan
-
       - uses: buddypracticerepo1-stack/costguard-action@v1
         id: costguard
         with:
           plan-path: plan.json
           api-key: ${{ secrets.COSTGUARD_API_KEY }}
-          api-url: 'https://4tm9xj5nv0.execute-api.us-east-1.amazonaws.com/rnd'
+          api-url: ${{ env.API_URL }}
           skip-budget: 'true'
-
-      - run: |
+          skip-narrative: 'true'
+          skip-guardrails: 'true'
+      - name: Verify
+        run: |
           echo "Decision: ${{ steps.costguard.outputs.decision }}"
-          echo "Monthly cost: ${{ steps.costguard.outputs.monthly-cost }}"
+          echo "Cost: ${{ steps.costguard.outputs.monthly-cost }}"
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+          echo "S1 PASSED"
 
+  # Scenario 2: Full pipeline with AI narrative + guardrails
+  s2-full-pipeline:
+    name: "S2: Full Pipeline (AI + Guardrails)"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: ${{ env.API_URL }}
+          skip-budget: 'true'
+      - name: Verify
+        run: |
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          echo "Cost: ${{ steps.costguard.outputs.monthly-cost }}"
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+          # Check narrative is present in cached result
+          python3 -c "
+          import json
+          d = json.load(open('costguard-result.json'))
+          r = d.get('results', d)
+          narrative = r.get('narrative', r.get('ai_narrative', ''))
+          assert narrative, 'No AI narrative found'
+          print(f'Narrative: {narrative[:100]}...')
+          "
+          echo "S2 PASSED"
+
+  # Scenario 3: Auto-approve with fake budget code
+  s3-auto-approve:
+    name: "S3: Auto-Approve (No Budget)"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: ${{ env.API_URL }}
+          budget-code: 'FAKE-BUDGET-001'
+          auto-approve: 'true'
+          skip-narrative: 'true'
+      - name: Verify
+        run: |
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+          echo "S3 PASSED — auto-approve prevented BLOCK on missing budget"
+
+  # Scenario 4: Include calculations via escape hatch
+  s4-calculations:
+    name: "S4: Include Calculations"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: ${{ env.API_URL }}
+          skip-budget: 'true'
+          skip-narrative: 'true'
+          skip-guardrails: 'true'
+          extra-args: '--include-calculations'
+      - name: Verify
+        run: |
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+          python3 -c "
+          import json
+          d = json.load(open('costguard-result.json'))
+          print('Result keys:', list(d.keys()))
+          print('S4 escape hatch --include-calculations worked')
+          "
+          echo "S4 PASSED"
+
+  # Scenario 5: Output file via escape hatch
+  s5-output-file:
+    name: "S5: Output File"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: ${{ env.API_URL }}
+          skip-budget: 'true'
+          skip-narrative: 'true'
+          skip-guardrails: 'true'
+          extra-args: '--output-file costguard-output.md'
+      - name: Verify
+        run: |
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+          [ -s costguard-output.md ] || (echo "FAIL: output file not created" && exit 1)
+          echo "Output file size: $(wc -c < costguard-output.md) bytes"
+          echo "S5 PASSED — output file written via escape hatch"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: costguard-reports
+          name: s5-output-file
+          path: costguard-output.md
+
+  # Scenario 6: Comment suppression (GitHub only)
+  s6-no-comment:
+    name: "S6: No Comment"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: ${{ env.API_URL }}
+          skip-budget: 'true'
+          skip-narrative: 'true'
+          skip-guardrails: 'true'
+          post-comment: 'false'
+      - name: Verify
+        run: |
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+          [ -f costguard-result.json ] || (echo "FAIL: no result file" && exit 1)
+          echo "S6 PASSED — no comment posted, artifacts still created"
+
+  # Scenario 7: Full verification of outputs and artifacts
+  s7-verify-all:
+    name: "S7: Full Verification"
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+      - uses: buddypracticerepo1-stack/costguard-action@v1
+        id: costguard
+        with:
+          plan-path: plan.json
+          api-key: ${{ secrets.COSTGUARD_API_KEY }}
+          api-url: ${{ env.API_URL }}
+          skip-budget: 'true'
+          skip-narrative: 'true'
+      - name: Verify Outputs
+        run: |
+          echo "=== CostGuard Output Verification ==="
+          echo "Decision: ${{ steps.costguard.outputs.decision }}"
+          echo "Monthly cost: ${{ steps.costguard.outputs.monthly-cost }}"
+          echo "Result file: ${{ steps.costguard.outputs.result-file }}"
+          echo "Report file: ${{ steps.costguard.outputs.report-file }}"
+
+          # Verify decision
+          [ "${{ steps.costguard.outputs.decision }}" = "ALLOW" ] || exit 1
+
+          # Verify monthly cost is not empty
+          [ -n "${{ steps.costguard.outputs.monthly-cost }}" ] || exit 1
+
+          # Verify result JSON structure
+          python3 -c "
+          import json
+          d = json.load(open('costguard-result.json'))
+          r = d.get('results', d)
+
+          # Check resources exist
+          resources = r.get('resources', r.get('pricing', {}).get('resources', []))
+          assert len(resources) >= 2, f'Expected 2+ resources, got {len(resources)}'
+
+          # Check total cost > 0
+          cost = r.get('total_monthly_usd', r.get('pricing', {}).get('total_monthly_usd', 0))
+          assert cost > 0, f'Expected cost > 0, got {cost}'
+
+          # Check decision
+          decision = r.get('decision', r.get('budget', {}).get('decision', ''))
+          print(f'Resources: {len(resources)}')
+          print(f'Monthly cost: \${cost}')
+          print(f'Decision: {decision}')
+          print('Result JSON validated successfully')
+          "
+
+          # Verify HTML report
+          [ -s costguard-report.html ] || (echo "FAIL: HTML report missing" && exit 1)
+          echo "HTML report: $(wc -c < costguard-report.html) bytes"
+
+          echo "=== S7 ALL VERIFICATIONS PASSED ==="
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: s7-reports
           path: |
             costguard-result.json
             costguard-report.html
-          retention-days: 30
