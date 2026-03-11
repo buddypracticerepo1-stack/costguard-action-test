@@ -75,10 +75,11 @@ jobs:
           python3 -c "
           import json
           d = json.load(open('costguard-result.json'))
-          r = d.get('results', d)
-          narrative = r.get('narrative', r.get('ai_narrative', ''))
+          narrative = d.get('narrative', d.get('ai_narrative', ''))
+          if isinstance(narrative, dict):
+              narrative = narrative.get('summary', narrative.get('text', str(narrative)))
           assert narrative, 'No AI narrative found'
-          print(f'Narrative: {narrative[:100]}...')
+          print(f'Narrative: {str(narrative)[:100]}...')
           "
           echo "S2 PASSED"
 
@@ -230,18 +231,17 @@ jobs:
           python3 -c "
           import json
           d = json.load(open('costguard-result.json'))
-          r = d.get('results', d)
 
-          # Check resources exist
-          resources = r.get('resources', r.get('pricing', {}).get('resources', []))
+          # Check resources exist (top-level 'resources' array)
+          resources = d.get('resources', [])
           assert len(resources) >= 2, f'Expected 2+ resources, got {len(resources)}'
 
-          # Check total cost > 0
-          cost = r.get('total_monthly_usd', r.get('pricing', {}).get('total_monthly_usd', 0))
+          # Check total cost > 0 (in summary.total_monthly_cost)
+          cost = d.get('summary', {}).get('total_monthly_cost', 0)
           assert cost > 0, f'Expected cost > 0, got {cost}'
 
-          # Check decision
-          decision = r.get('decision', r.get('budget', {}).get('decision', ''))
+          # Check decision (top-level)
+          decision = d.get('decision', '')
           print(f'Resources: {len(resources)}')
           print(f'Monthly cost: \${cost}')
           print(f'Decision: {decision}')
