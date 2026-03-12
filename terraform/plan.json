@@ -26,7 +26,7 @@
           "provider_name": "registry.terraform.io/hashicorp/aws",
           "values": {
             "availability_zone": "us-east-1a",
-            "size": 200,
+            "size": 400,
             "type": "gp3",
             "iops": 6000,
             "throughput": 250,
@@ -155,3 +155,4 @@
     }
   }
 }
+
