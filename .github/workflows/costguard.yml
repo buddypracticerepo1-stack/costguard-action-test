@@ -38,7 +38,6 @@ jobs:
         with:
           plan-path: plan.json
           api-key: ${{ secrets.COSTGUARD_API_KEY }}
-          api-url: ${{ secrets.COSTGUARD_API_URL }}
           skip-budget: 'true'
 
       - run: |

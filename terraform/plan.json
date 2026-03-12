@@ -11,10 +11,10 @@
           "provider_name": "registry.terraform.io/hashicorp/aws",
           "values": {
             "ami": "ami-0c55b159cbfafe1f0",
-            "instance_type": "t3.micro",
+            "instance_type": "t3.xlarge",
             "tags": {
-              "Name": "skyxops-web-dev",
-              "Environment": "dev",
+              "Name": "costguard-web-prod",
+              "Environment": "production",
               "Team": "platform"
             }
           }
@@ -26,10 +26,31 @@
           "provider_name": "registry.terraform.io/hashicorp/aws",
           "values": {
             "availability_zone": "us-east-1a",
-            "size": 20,
+            "size": 200,
             "type": "gp3",
+            "iops": 6000,
+            "throughput": 250,
             "tags": {
-              "Name": "skyxops-web-data-dev"
+              "Name": "costguard-web-data-prod"
+            }
+          }
+        },
+        {
+          "address": "aws_db_instance.primary",
+          "type": "aws_db_instance",
+          "name": "primary",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "values": {
+            "identifier": "costguard-db-prod",
+            "engine": "postgres",
+            "engine_version": "15.4",
+            "instance_class": "db.r6g.large",
+            "allocated_storage": 100,
+            "multi_az": true,
+            "storage_encrypted": true,
+            "tags": {
+              "Name": "costguard-db-prod",
+              "Environment": "production"
             }
           }
         }
@@ -47,14 +68,14 @@
         "before": null,
         "after": {
           "ami": "ami-0c55b159cbfafe1f0",
-          "instance_type": "t3.micro",
+          "instance_type": "t3.xlarge",
           "availability_zone": "us-east-1a",
           "tenancy": "default",
-          "ebs_optimized": false,
+          "ebs_optimized": true,
           "monitoring": false,
           "tags": {
-            "Name": "skyxops-web-dev",
-            "Environment": "dev",
+            "Name": "costguard-web-prod",
+            "Environment": "production",
             "Team": "platform"
           }
         },
@@ -75,18 +96,48 @@
         "before": null,
         "after": {
           "availability_zone": "us-east-1a",
-          "size": 20,
+          "size": 200,
           "type": "gp3",
-          "iops": 3000,
-          "throughput": 125,
+          "iops": 6000,
+          "throughput": 250,
           "encrypted": true,
           "tags": {
-            "Name": "skyxops-web-data-dev"
+            "Name": "costguard-web-data-prod"
           }
         },
         "after_unknown": {
           "id": true,
           "arn": true
+        }
+      }
+    },
+    {
+      "address": "aws_db_instance.primary",
+      "type": "aws_db_instance",
+      "name": "primary",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "identifier": "costguard-db-prod",
+          "engine": "postgres",
+          "engine_version": "15.4",
+          "instance_class": "db.r6g.large",
+          "allocated_storage": 100,
+          "multi_az": true,
+          "storage_encrypted": true,
+          "skip_final_snapshot": true,
+          "tags": {
+            "Name": "costguard-db-prod",
+            "Environment": "production"
+          }
+        },
+        "after_unknown": {
+          "id": true,
+          "arn": true,
+          "endpoint": true,
+          "address": true
         }
       }
     }
