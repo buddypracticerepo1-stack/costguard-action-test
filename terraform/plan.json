@@ -53,6 +53,20 @@
               "Environment": "production"
             }
           }
+        },
+        {
+          "address": "aws_nat_gateway.main",
+          "type": "aws_nat_gateway",
+          "name": "main",
+          "provider_name": "registry.terraform.io/hashicorp/aws",
+          "values": {
+            "allocation_id": "eipalloc-0123456789abcdef0",
+            "subnet_id": "subnet-0123456789abcdef0",
+            "tags": {
+              "Name": "costguard-nat-prod",
+              "Environment": "production"
+            }
+          }
         }
       ]
     }
@@ -138,6 +152,31 @@
           "arn": true,
           "endpoint": true,
           "address": true
+        }
+      }
+    },
+    {
+      "address": "aws_nat_gateway.main",
+      "type": "aws_nat_gateway",
+      "name": "main",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["create"],
+        "before": null,
+        "after": {
+          "allocation_id": "eipalloc-0123456789abcdef0",
+          "subnet_id": "subnet-0123456789abcdef0",
+          "connectivity_type": "public",
+          "tags": {
+            "Name": "costguard-nat-prod",
+            "Environment": "production"
+          }
+        },
+        "after_unknown": {
+          "id": true,
+          "public_ip": true,
+          "private_ip": true,
+          "network_interface_id": true
         }
       }
     }

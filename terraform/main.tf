@@ -36,3 +36,13 @@ resource "aws_db_instance" "primary" {
     Environment = "production"
   }
 }
+
+resource "aws_nat_gateway" "main" {
+  allocation_id = "eipalloc-0123456789abcdef0"
+  subnet_id     = "subnet-0123456789abcdef0"
+
+  tags = {
+    Name        = "costguard-nat-prod"
+    Environment = "production"
+  }
+}
